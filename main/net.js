@@ -37,33 +37,19 @@
 'use strict';
 
 const fs = require('fs');
-const net = require('electron').net;
-const session = require('electron').session;
+const https = require('https');
+const nodeUrl = require('url');
+const ProxyAgent = require('proxy-agent');
 
-// Using the same session name as electron-updater, so that proxy credentials
-// (if required) only have to be sent once.
-const NET_SESSION_NAME = 'electron-updater';
-
-let onProxyLogin;
-
-/**
- * Register a function that should be called when a proxy asks for username
- * and password. The function receives an authInfo object and a callback function.
- * The callback function must be invoked with username and password. More info:
- * https://github.com/electron/electron/blob/master/docs/api/client-request.md
- *
- * @param {Function} onLoginRequested Signature: (authInfo, callback) => {}.
- * @returns {void}
- */
-function registerProxyLoginHandler(onLoginRequested) {
-    onProxyLogin = onLoginRequested;
-}
+const proxyAgent = new ProxyAgent();
 
 function downloadToBuffer(url) {
     return new Promise((resolve, reject) => {
-        const request = net.request({
-            url,
-            session: session.fromPartition(NET_SESSION_NAME),
+        const parsedUrl = nodeUrl.parse(url);
+        const request = https.request({
+            host: parsedUrl.host,
+            path: parsedUrl.path,
+            agent: proxyAgent,
         });
         request.setHeader('pragma', 'no-cache');
         request.on('response', response => {
@@ -81,7 +67,6 @@ function downloadToBuffer(url) {
             response.on('error', error => reject(new Error(`Error when reading ${url}: ` +
                 `${error.message}`)));
         });
-        request.on('login', onProxyLogin);
         request.on('error', error => reject(new Error(`Unable to download ${url}: ` +
             `${error.message}`)));
         request.end();
@@ -141,5 +126,4 @@ module.exports = {
     downloadToFile,
     downloadToString,
     downloadToJson,
-    registerProxyLoginHandler,
 };
